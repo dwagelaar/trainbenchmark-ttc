@@ -1,0 +1,225 @@
+\documentclass[submission,copyright,creativecommons]{eptcs}
+\providecommand{\event}{TTC 2015} % Name of the event you are submitting to
+\usepackage{breakurl}             % Not needed if you use pdflatex only.
+\usepackage{flafter}
+\usepackage{listings}
+\usepackage{graphicx}
+\usepackage{url}
+\usepackage{color}
+
+%ATL language highlighting
+\lstdefinelanguage{atl}
+{
+  sensitive=true,
+  morecomment=[l]{--},
+  morestring=[b]',
+  classoffset=0,
+  morekeywords={module, create, from, to, using, mapsTo, rule, helper, refining,
+                context, def, if, then, else, endif, library, and, or, not, query, 
+                do, endpoint, entrypoint, lazy, unique, nodefault, for, in, self,
+                thisModule, uses, let},
+  classoffset=1,
+  morekeywords={OclAny,Integer,Real,String,Boolean,Collection,Bag,Set,OrderedSet,
+                Sequence,Map,Tuple,TupleType}
+}
+
+%SimpleGT language highlighting
+\lstdefinelanguage{simplegt}
+{
+  sensitive=true,
+  morecomment=[l]{--},
+  classoffset=0,
+  morekeywords={module, import, transform, from, to, abstract, rule, before, 
+                def, if, then, else, endif, and, or, not, lazy, unique, default,
+                in, self, uses, env, single, context, static, let, metamodel},
+  classoffset=1,
+  morekeywords={OclAny,Integer,Real,String,Boolean,Collection,Bag,Set,OrderedSet,
+                Sequence,Map,Tuple,TupleType,Env}
+}
+
+\definecolor{commentgreen}{rgb}{0.0, 0.4, 0.1}
+\definecolor{commentblue}{rgb}{0.0, 0.1, 0.4}
+\definecolor{typegreen}{rgb}{0.0, 0.6, 0.0}
+\definecolor{keywordred}{rgb}{0.4, 0.0, 0.1}
+
+%Standard listing style
+\lstset{
+  numbers=left,
+  numberstyle=\tiny,
+  stepnumber=1,
+  numbersep=5pt,
+  tabsize=2,
+  basicstyle=\scriptsize\tt,
+  commentstyle=\scriptsize\tt\color{commentblue},
+  stringstyle=\scriptsize\tt\color{blue},
+  classoffset=0,
+  keywordstyle=\scriptsize\tt\bf\color{keywordred},
+  classoffset=1,
+  keywordstyle=\scriptsize\tt\color{typegreen},
+  classoffset=0 % restore default
+}
+
+\title{The {ATL/EMFTVM} Solution to the Train Benchmark Case for {TTC2015}}
+\author{Dennis Wagelaar
+\institute{HealthConnect\\
+Vilvoorde, Belgium}
+\email{dennis.wagelaar@healthconnect.be}
+}
+\def\titlerunning{The {ATL/EMFTVM} Solution to the Train Benchmark Case for {TTC2015}}
+\def\authorrunning{D. Wagelaar}
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This paper describes the ATL/EMFTVM solution of the TTC 2015 Train Benchmark Case. A complete solution for all tasks is provided, three of which are discussed with regard to the three provided evaluation criteria: Correctness and Completeness of Model Queries and Transformations, Applicability for Model Validation, and Performance on Large Models.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:intro}
+
+This paper describes a solution of the TTC 2015 Train Benchmark Case~\cite{conf/ttc/Szarnyas2015} made with ATL~\cite{journal/scp/Jouault2008} and the EMF Transformation Virtual Machine (EMFTVM) runtime engine~\cite{conf/models/Wagelaar2011}. The Train Benchmark Case consists of several model validation and model repair tasks: three main tasks and two extension tasks. All of these tasks are run again increasing model sizes in order to measure the performance of each solution for the case. A complete solution for all tasks is provided, and is available as a GitHub fork of the original assignment\footnote{\url{https://github.com/dwagelaar/trainbenchmark-ttc}}. Section~\ref{sec:atl} of this paper describes the ATL transformation tool and its features that are relevant to the case. Section~\ref{sec:solution} describes the solution to the case, and section~\ref{sec:eval} concludes this paper with an evaluation.
+
+\section{ATL/EMFTVM}
+\label{sec:atl} 
+
+ATL is a rule-based, hybrid model transformation language that allows declarative as well as imperative transformation styles. For this TTC solution, we use the new EMF Transformation Virtual Machine (EMFTVM). EMFTVM includes a number of language enhancements, as well as performance enhancements. For this TTC case, specific performance enhancements are relevant.
+
+\subsection{JIT compiler}
+
+EMFTVM includes a Just-In-Time (JIT) compiler that translates its bytecode to Java bytecode. EMFTVM bytecode instructions are organised in \emph{code blocks}, which are executable lists of instructions. When a code block is executed more often than a predefined threshold, the JIT compiler triggers, and will generate a Java bytecode equivalent for the EMFTVM code block.
+
+\subsection{Lazy evaluation}
+
+EMFTVM includes an implementation of the OCL 2.2 standard library~\cite{omg/ocl22}, and employs lazy evaluation for the collection operations (e.g. \texttt{select}, \texttt{collect}, \texttt{flatten}, \texttt{isEmpty}, etc.). That operations invoked on collections are only (partially) executed when you evaluate the collection. For example, the \texttt{lazytest} query in Listing~\ref{lst:lazy} invokes \texttt{collect} on a Sequence of all numbers from 0 to 100, which replaces each value in the Sequence by its squared value, but eventually only returns the last value of the Sequence. \texttt{collect} returns a lazy Sequence, which is just waiting to be evaluated. Only when \texttt{last} is invoked, the \texttt{square} operation is invoked on the last element of the input Sequence. As a result, \texttt{square} is only invoked once.
+
+\lstset{language=atl}
+\begin{lstlisting}[float=htb, caption={Lazy collections in ATL}, label=lst:lazy, captionpos=b, frame=tb, belowskip=-10pt]
+query lazytest = Sequence{0..100}->collect(x | x.square())->last();
+helper context Integer def : square() : Integer =
+	(self * self).debug('square');
+\end{lstlisting}
+
+\subsection{Caching of model elements}
+
+Model transformations usually look up model elements by their type or meta-class. In the Eclipse Modeling Framework (EMF)~\cite{book/Budinsky03}, this means iterating over the entire model and filtering on element type. Often, an element look up by type is made repeatedly on the same model. In the case of this benchmark, the same query/transformation is run multiple times on the same model. For this reason, EMFTVM keeps a cache of model elements by type for each model. This cache is automatically kept up to date when adding/removing model elements through EMFTVM. The cache is built up lazily, which means that a full iteration over the model must have taken place before the cache is activated for that element type. This prevents a build up of caches that are never used.
+
+\section{Solution Description}
+\label{sec:solution}
+
+The Train Benchmark Case involves first querying a model for constraint violations, and then repairing some of those constraint violations that are randomly selected by the benchmark framework. This means that the matching phase and the transformation phase, which are normally integrated in ATL, are now separated by the benchmark framework. The framework first launches the matching phase, and collects the found matches. After that, it randomly selects a number of matches, and feeds them into the transformation phase.
+
+ATL provides a \textbf{query} construct that allows one to query the model using OCL and return the resulting values. The selected matches are fed back into the ATL VM through a helper attribute, specified in the framework repair transformation module shown in Listing~\ref{lst:repair}. The benchmark framework copies the returned lazy collection into a regular \texttt{java.util.ArrayList}, which ensures that the performance measurements are valid.
+
+\lstset{language=atl}
+\begin{lstlisting}[float=htb, caption={Framework repair transformation module in ATL}, label=lst:repair, captionpos=b, frame=tb, belowskip=-10pt]
+module Repair;
+create OUT: RAILWAY refining IN: RAILWAY;
+helper def : matches : Collection(OclAny) = Sequence{};
+lazy rule Repair {
+	from s: OclAny
+}
+endpoint rule Main() {
+	do {
+		for (s in thisModule.matches) {
+			thisModule.Repair(s);
+		}
+	}
+}
+\end{lstlisting}
+
+The Repair transformation module contains a helper attribute \texttt{matches}, which is used to inject the matches selected by the benchmark framework. Furthermore, it contains a lazy rule \texttt{Repair}, which does nothing in this framework transformation. The \texttt{Repair} rule is invoked by every element in \texttt{matches} by the \texttt{Main} endpoint rule. The \texttt{Main} endpoint rule is automatically invoked. Normally, ATL transformations use matched rules that are automatically triggered for all matching elements in the input model(s). However, this benchmark requires the elements to transform to be set explicitly. Hence the need for this framework transformation module. All specific repair transformation modules are \emph{superimposed}~\cite{journal/sosym/Wagelaar2009} onto the framework transformation module, and redefine the \texttt{Repair} rule. This means that for each task we only need to define an ATL query and a \texttt{Repair} rule. Because of space constraints, two out of five tasks will be discussed in this paper.
+
+\subsection{Task 1: PosLength}
+
+Listing~\ref{lst:poslength} shows the ATL query for Poslength. It simply collects all Segment instances with a length of zero or smaller. Listing~\ref{lst:poslengthrepair} shows the ATL repair transformation module for Poslength. It imports the framework Repair transformation module from Listing~\ref{lst:repair}, and redefines the \texttt{Repair} rule. As no new elements need to be created, an imperative \textbf{do} block is used to make the required modification directly on the source element. The \texttt{<:=} assignment operator is used instead of the \texttt{<-} binding operator, such that the implicit source-to-target tracing is skipped.
+
+\lstset{language=atl}
+\begin{lstlisting}[float=htb, caption={PosLength query in ATL}, label=lst:poslength, captionpos=b, frame=tb, belowskip=-10pt]
+query PosLength = RAILWAY!Segment.allInstances()->select(s | s.length <= 0);
+\end{lstlisting}
+
+\lstset{language=atl}
+\begin{lstlisting}[float=htb, caption={PosLength repair transformation module in ATL}, label=lst:poslengthrepair, captionpos=b, frame=tb, belowskip=-10pt]
+module PosLengthRepair;
+create OUT: RAILWAY refining IN: RAILWAY;
+uses Repair;
+lazy rule Repair {
+	from s: RAILWAY!Segment
+	do   { s.length <:= -s.length + 1; }
+}
+\end{lstlisting}
+
+\subsection{Task 2: SwitchSensor}
+
+Listing~\ref{lst:switchsensor} shows the ATL query for SwitchSensor. It collects all Switch instances for which the sensor is not set. Listing~\ref{lst:switchsensorrepair} shows the ATL repair transformation module for SwitchSensor. This time, the \texttt{Repair} rule also contains a \textbf{to} section that creates a new Sensor instance \texttt{se}. In the \textbf{do} section, this Sensor is assigned to the sensor reference of the input Switch element.
+
+\lstset{language=atl}
+\begin{lstlisting}[float=htb, caption={SwitchSensor query in ATL}, label=lst:switchsensor, captionpos=b, frame=tb, belowskip=-10pt]
+query SwitchSensor = RAILWAY!Switch.allInstances()->select(s | s.sensor.oclIsUndefined());
+\end{lstlisting}
+
+\lstset{language=atl}
+\begin{lstlisting}[float=htb, caption={SwitchSensor repair transformation module in ATL}, label=lst:switchsensorrepair, captionpos=b, frame=tb, belowskip=-10pt]
+module SwitchSensorRepair;
+create OUT: RAILWAY refining IN: RAILWAY;
+uses Repair;
+lazy rule Repair {
+	from s: RAILWAY!Switch
+	to   se: RAILWAY!Sensor
+	do	 { s.sensor <:= se; }
+}
+\end{lstlisting}
+
+\subsection{Extension Task 1: RouteSensor}
+
+Listing~\ref{lst:routesensor} shows the ATL query for RouteSensor. The query collects Tuples of each match, where a match is defined by Route \texttt{r}, SwitchPosition \texttt{p}, Switch \texttt{sw}, and Sensor \texttt{s}. A Tuple is created for each SwitchPosition connected to a Sensor that is not connected to the Route, for each Route that has Sensors connected to it. Listing~\ref{lst:routesensorrepair} shows the ATL repair transformation module for RouteSensor. The \texttt{Repair} rule takes the Tuple match as input element, and adds the Sensor in the match to the Route's definedBy sensors.
+
+
+\lstset{language=atl}
+\begin{lstlisting}[float=htb, caption={RouteSensor query in ATL}, label=lst:routesensor, captionpos=b, frame=tb, belowskip=-10pt]
+query RouteSensor = RAILWAY!Route.allInstances()
+	->select(r | r.definedBy->notEmpty())
+	->collect(r |
+		r.follows->select(p | 
+			not p.switch.oclIsUndefined() and 
+			not p.switch.sensor.oclIsUndefined() and
+			r.definedBy->excludes(p.switch.sensor)
+		)->collect(p | 
+			Tuple{r = r, p = p, sw = p.switch, s = p.switch.sensor}
+		)
+	)->flatten();
+\end{lstlisting}
+
+\lstset{language=atl}
+\begin{lstlisting}[float=htb, caption={RouteSensor repair transformation module in ATL}, label=lst:routesensorrepair, captionpos=b, frame=tb, belowskip=-10pt]
+module RouteSensorRepair;
+create OUT: RAILWAY refining IN: RAILWAY;
+uses Repair;
+lazy rule Repair {
+	from s : TupleType(r : RAILWAY!Route, p : RAILWAY!SwitchPosition, sw : RAILWAY!Switch,
+	                   s : RAILWAY!Sensor)
+	do   { s.r.definedBy <:= s.r.definedBy->including(s.s);	}
+}
+\end{lstlisting}
+
+
+\section{Evaluation and Conclusion}
+\label{sec:eval}
+
+The solutions for the Train Benchmark Case are evaluated on three criteria: (1) \emph{Correctness and Completeness of Model Queries and Transformations}, (2) \emph{Applicability for Model Validation}, and (3) \emph{Performance on Large Models}. We will now discuss how the ATL solution aims to meet these criteria.
+
+\subsection{Correctness and Completeness}
+
+The benchmark framework provides a set of expected query/transformation results, against which the output of the ATL solution can be compared. The \texttt{ATLTest} JUnit test case verifies that the output of the ATL solution matches the reference solution. The test results of each build are kept in the cloud-based Travis continuous integration platform\footnote{\url{https://travis-ci.org/dwagelaar/trainbenchmark-ttc}}. This independent platform provides an objective proof that the ATL solution unit tests are passing.
+
+\subsection{Applicability}
+
+In order for a solution to be applicable for model validation, it must be concise and maintainable. Even though ATL is not primarily intended for interactive querying and transformation, it was easy to fit the ATL implementation into the benchmark framework. Simple queries are trivially expressed in OCL, using a functional programming style (PosLength, SwitchSensor). Complex queries that return tuples as matches (SwitchSet, RouteSensor, SemaphoreNeighbor) require a navigation strategy to be implemented. All repair phase transformations are all simple, single rule transformation modules that are \emph{superimposed} onto a single framework Repair transformation module (see Listing~\ref{lst:repair}). Query matches are provided via the rule \textbf{from} part, whereas the model element modification is done in a \textbf{do} block. Any new elements are specified in the \textbf{to} block.
+
+\subsection{Performance}
+
+In the ATL language, performance is achieved by using helper attributes instead of operations where possible, as helper attribute values are cached; accessing a helper attribute more than once on the same object will not trigger evaluation again, but just returns the cached value. EMFTVM also applies certain performance optimisations: complex code blocks are JIT-compiled to Java bytecode, which in turn may be JIT-compiled to native code by the JVM. Collections and boolean expressions are evaluated lazily, preventing unnecessary navigation. Finally, model elements are cached by their type, making repeated lookup of all instances of a certain metaclass more performant.
+
+\bibliographystyle{eptcs}
+\bibliography{ttc15-atl}
+\end{document}
