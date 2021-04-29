@@ -1,6 +1,6 @@
 # The TTC 2015 Train Benchmark Case
 
-[![Build Status](https://travis-ci.org/dwagelaar/trainbenchmark-ttc.svg?branch=master)](https://travis-ci.org/dwagelaar/trainbenchmark-ttc)
+[![Build Status](https://travis-ci.com/dwagelaar/trainbenchmark-ttc.svg?branch=master)](https://travis-ci.com/dwagelaar/trainbenchmark-ttc)
 
 **Note.** Although closely related, this repository is not to be confused with the `trainbenchmark` repository which is a benchmark framework for comparing various database management tools, including triplestores, relational databases and graph databases.
 
