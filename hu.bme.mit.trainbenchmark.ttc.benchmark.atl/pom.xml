@@ -11,7 +11,7 @@
 	<artifactId>hu.bme.mit.trainbenchmark.ttc.benchmark.atl</artifactId>
 	
 	<properties>
-		<atl.version>3.6.0-SNAPSHOT</atl.version>
+		<atl.version>4.3.0</atl.version>
 	</properties>
 
 	<build>
@@ -73,23 +73,8 @@
 
 		<dependency>
 			<groupId>org.eclipse.m2m.atl</groupId>
-			<artifactId>org.eclipse.m2m.atl.common</artifactId>
+			<artifactId>org.eclipse.m2m.atl.emftvm.ant.standalone</artifactId>
 			<version>${atl.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>org.eclipse.m2m.atl</groupId>
-			<artifactId>org.eclipse.m2m.atl.emftvm</artifactId>
-			<version>${atl.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>org.eclipse.m2m.atl</groupId>
-			<artifactId>org.eclipse.m2m.atl.emftvm.trace</artifactId>
-			<version>${atl.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>asm</groupId>
-			<artifactId>asm</artifactId>
-			<version>3.3.1</version>
 		</dependency>
 
 	</dependencies>
